@@ -31,6 +31,10 @@ function Students() {
   const [query, setQuery] = useState("");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importClassId, setImportClassId] = useState(classes[0]?.id ?? "");
+  const [importText, setImportText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [rollNumber, setRollNumber] = useState("");
