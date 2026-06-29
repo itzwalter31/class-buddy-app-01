@@ -88,6 +88,15 @@ function Attendance() {
     toast.success("Day reset — all marked present.");
   }
 
+  function exportDay() {
+    if (!klass) return;
+    const rows: (string | number)[][] = [["Date", "Class", "Roll", "First name", "Last name", "Status"]];
+    for (const s of classStudents) {
+      rows.push([date, klass.name, s.rollNumber ?? "", s.firstName, s.lastName, recordMap.get(s.id) ?? "unmarked"]);
+    }
+    downloadCSV(`attendance-${klass.name.replace(/\s+/g, "_")}-${date}.csv`, rows);
+  }
+
   if (classes.length === 0) {
     return (
       <EmptyState
