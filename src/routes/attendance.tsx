@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { useStore, store, type AttendanceStatus } from "@/lib/store";
+import { useStore, store, downloadCSV, type AttendanceStatus } from "@/lib/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -88,6 +88,15 @@ function Attendance() {
     toast.success("Day reset — all marked present.");
   }
 
+  function exportDay() {
+    if (!klass) return;
+    const rows: (string | number)[][] = [["Date", "Class", "Roll", "First name", "Last name", "Status"]];
+    for (const s of classStudents) {
+      rows.push([date, klass.name, s.rollNumber ?? "", s.firstName, s.lastName, recordMap.get(s.id) ?? "unmarked"]);
+    }
+    downloadCSV(`attendance-${klass.name.replace(/\s+/g, "_")}-${date}.csv`, rows);
+  }
+
   if (classes.length === 0) {
     return (
       <EmptyState
@@ -160,6 +169,9 @@ function Attendance() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{marked} marked · {unmarked} pending</span>
+          <Button variant="outline" size="sm" onClick={exportDay} disabled={classStudents.length === 0}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
+          </Button>
           {marked > 0 && (
             <Button variant="ghost" size="sm" onClick={resetDay}>Reset day</Button>
           )}

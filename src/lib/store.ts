@@ -19,10 +19,10 @@ export interface Student {
 }
 
 export interface AttendanceRecord {
-  id: string; // `${classId}:${date}:${studentId}`
+  id: string;
   classId: string;
   studentId: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   status: AttendanceStatus;
 }
 
@@ -32,7 +32,6 @@ interface State {
   attendance: AttendanceRecord[];
 }
 
-const STORAGE_KEY = "rollcall.state.v1";
 const COLORS = [
   "oklch(0.72 0.13 180)",
   "oklch(0.72 0.15 75)",
@@ -41,6 +40,16 @@ const COLORS = [
   "oklch(0.65 0.18 290)",
   "oklch(0.70 0.15 220)",
 ];
+
+const EMPTY: State = { classes: [], students: [], attendance: [] };
+
+let userKey: string | null = null;
+let state: State = EMPTY;
+const listeners = new Set<() => void>();
+
+function storageKey() {
+  return userKey ? `rollcall.state.v2.${userKey}` : null;
+}
 
 function seed(): State {
   const c1 = crypto.randomUUID();
@@ -60,7 +69,6 @@ function seed(): State {
     ...names2.map(([f, l], i) => ({ id: crypto.randomUUID(), classId: c2, firstName: f, lastName: l, rollNumber: String(i + 1).padStart(2, "0") })),
   ];
   const attendance: AttendanceRecord[] = [];
-  // Seed past 14 days of attendance for the first class
   const classStudents = students.filter((s) => s.classId === c1);
   for (let d = 14; d >= 1; d--) {
     const date = new Date();
@@ -84,26 +92,25 @@ function seed(): State {
 }
 
 function load(): State {
-  if (typeof window === "undefined") return { classes: [], students: [], attendance: [] };
+  const key = storageKey();
+  if (!key || typeof window === "undefined") return EMPTY;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) {
       const seeded = seed();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      localStorage.setItem(key, JSON.stringify(seeded));
       return seeded;
     }
     return JSON.parse(raw) as State;
   } catch {
-    return { classes: [], students: [], attendance: [] };
+    return EMPTY;
   }
 }
 
-let state: State = typeof window === "undefined" ? { classes: [], students: [], attendance: [] } : load();
-const listeners = new Set<() => void>();
-
 function persist() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const key = storageKey();
+  if (key && typeof window !== "undefined") {
+    localStorage.setItem(key, JSON.stringify(state));
   }
   listeners.forEach((l) => l());
 }
@@ -111,6 +118,13 @@ function persist() {
 function subscribe(l: () => void) {
   listeners.add(l);
   return () => listeners.delete(l);
+}
+
+export function setUserScope(uid: string | null) {
+  if (userKey === uid) return;
+  userKey = uid;
+  state = uid ? load() : EMPTY;
+  listeners.forEach((l) => l());
 }
 
 export function useStore<T>(selector: (s: State) => T): T {
@@ -153,6 +167,12 @@ export const store = {
     persist();
     return s;
   },
+  addStudentsBulk(items: { classId: string; firstName: string; lastName: string; rollNumber?: string }[]) {
+    const added = items.map((it) => ({ id: crypto.randomUUID(), ...it }));
+    state = { ...state, students: [...state.students, ...added] };
+    persist();
+    return added;
+  },
   updateStudent(id: string, patch: Partial<Student>) {
     state = { ...state, students: state.students.map((s) => (s.id === id ? { ...s, ...patch } : s)) };
     persist();
@@ -169,10 +189,7 @@ export const store = {
     const id = `${classId}:${date}:${studentId}`;
     const existing = state.attendance.find((a) => a.id === id);
     if (existing) {
-      state = {
-        ...state,
-        attendance: state.attendance.map((a) => (a.id === id ? { ...a, status } : a)),
-      };
+      state = { ...state, attendance: state.attendance.map((a) => (a.id === id ? { ...a, status } : a)) };
     } else {
       state = { ...state, attendance: [...state.attendance, { id, classId, date, studentId, status }] };
     }
@@ -187,10 +204,6 @@ export const store = {
     state = { ...state, attendance: Array.from(map.values()) };
     persist();
   },
-  resetAll() {
-    state = seed();
-    persist();
-  },
 };
 
 export function studentRate(studentId: string, classId?: string) {
@@ -202,7 +215,43 @@ export function studentRate(studentId: string, classId?: string) {
   const late = records.filter((r) => r.status === "late").length;
   const absent = records.filter((r) => r.status === "absent").length;
   const excused = records.filter((r) => r.status === "excused").length;
-  // Present + Late counts as attended for rate
   const rate = ((present + late) / records.length) * 100;
   return { rate, total: records.length, present, absent, late, excused };
+}
+
+export function downloadCSV(filename: string, rows: (string | number)[][]) {
+  const csv = rows
+    .map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let cur: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+      } else field += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") { cur.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        cur.push(field); rows.push(cur); cur = []; field = "";
+      } else field += ch;
+    }
+  }
+  if (field.length > 0 || cur.length > 0) { cur.push(field); rows.push(cur); }
+  return rows.filter((r) => r.some((c) => c.trim().length > 0));
 }

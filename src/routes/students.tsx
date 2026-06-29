@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { useStore, store, studentRate } from "@/lib/store";
+import { useStore, store, studentRate, parseCSV, downloadCSV } from "@/lib/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/students")({
@@ -31,6 +31,10 @@ function Students() {
   const [query, setQuery] = useState("");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importClassId, setImportClassId] = useState(classes[0]?.id ?? "");
+  const [importText, setImportText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [rollNumber, setRollNumber] = useState("");
@@ -51,6 +55,69 @@ function Students() {
     toast.success("Student added.");
   }
 
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportText(String(reader.result ?? ""));
+    };
+    reader.readAsText(f);
+    e.target.value = "";
+  }
+
+  function runImport() {
+    if (!importClassId) { toast.error("Pick a class first."); return; }
+    const rows = parseCSV(importText);
+    if (rows.length === 0) { toast.error("No rows found."); return; }
+    // Detect header
+    const first = rows[0].map((c) => c.trim().toLowerCase());
+    const hasHeader = first.some((c) => ["first name", "firstname", "first", "last name", "lastname", "last", "name", "roll", "roll number", "rollnumber"].includes(c));
+    let firstIdx = 0, lastIdx = 1, rollIdx = 2, nameIdx = -1;
+    let dataStart = 0;
+    if (hasHeader) {
+      dataStart = 1;
+      firstIdx = first.findIndex((c) => c === "first name" || c === "firstname" || c === "first");
+      lastIdx = first.findIndex((c) => c === "last name" || c === "lastname" || c === "last");
+      nameIdx = first.findIndex((c) => c === "name" || c === "full name" || c === "fullname");
+      rollIdx = first.findIndex((c) => c === "roll" || c === "roll number" || c === "rollnumber" || c === "roll no" || c === "id");
+    }
+    const items: { classId: string; firstName: string; lastName: string; rollNumber?: string }[] = [];
+    for (let i = dataStart; i < rows.length; i++) {
+      const r = rows[i];
+      let fn = "", ln = "";
+      if (firstIdx >= 0 && lastIdx >= 0) {
+        fn = (r[firstIdx] ?? "").trim();
+        ln = (r[lastIdx] ?? "").trim();
+      } else if (nameIdx >= 0) {
+        const parts = (r[nameIdx] ?? "").trim().split(/\s+/);
+        fn = parts[0] ?? ""; ln = parts.slice(1).join(" ");
+      } else {
+        // assume 2-3 columns: first, last, roll
+        fn = (r[0] ?? "").trim();
+        ln = (r[1] ?? "").trim();
+      }
+      const roll = rollIdx >= 0 ? (r[rollIdx] ?? "").trim() : (r[2] ?? "").trim();
+      if (!fn && !ln) continue;
+      items.push({ classId: importClassId, firstName: fn, lastName: ln, rollNumber: roll || undefined });
+    }
+    if (items.length === 0) { toast.error("No valid student rows."); return; }
+    store.addStudentsBulk(items);
+    toast.success(`Imported ${items.length} students.`);
+    setImportText("");
+    setImportOpen(false);
+  }
+
+  function exportStudents() {
+    const rows: (string | number)[][] = [["First name", "Last name", "Roll number", "Class", "Attendance rate %", "Records"]];
+    for (const s of list) {
+      const cls = classes.find((c) => c.id === s.classId);
+      const stats = studentRate(s.id);
+      rows.push([s.firstName, s.lastName, s.rollNumber ?? "", cls?.name ?? "", stats.total ? Math.round(stats.rate) : "", stats.total]);
+    }
+    downloadCSV(`students-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -58,41 +125,86 @@ function Students() {
           <h1 className="text-3xl font-bold tracking-tight">Students</h1>
           <p className="text-muted-foreground">All your students with attendance performance.</p>
         </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !classId) setClassId(classes[0]?.id ?? ""); }}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="shadow-soft" disabled={classes.length === 0}>
-              <Plus className="mr-2 h-4 w-4" /> Add student
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add student</DialogTitle></DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Class</label>
-                <Select value={classId} onValueChange={setClassId}>
-                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                  <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportStudents} disabled={list.length === 0}>
+            <Download className="mr-2 h-4 w-4" /> Export
+          </Button>
+          <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (o && !importClassId) setImportClassId(classes[0]?.id ?? ""); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" disabled={classes.length === 0}>
+                <Upload className="mr-2 h-4 w-4" /> Import CSV
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Import students from CSV</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Add to class</label>
+                  <Select value={importClassId} onValueChange={setImportClassId}>
+                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                    <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Upload .csv file</label>
+                  <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} className="block w-full text-sm" />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Columns: <code>First name, Last name, Roll number</code> (header optional). A single <code>Name</code> column is also accepted.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Or paste CSV</label>
+                  <textarea
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    rows={6}
+                    placeholder={"First name,Last name,Roll number\nAva,Lopez,03\nLeo,Murphy,04"}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">First name</label>
-                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setImportOpen(false)}>Cancel</Button>
+                <Button onClick={runImport} disabled={!importText.trim()}>Import</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !classId) setClassId(classes[0]?.id ?? ""); }}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="shadow-soft" disabled={classes.length === 0}>
+                <Plus className="mr-2 h-4 w-4" /> Add student
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add student</DialogTitle></DialogHeader>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium">Class</label>
+                  <Select value={classId} onValueChange={setClassId}>
+                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                    <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">First name</label>
+                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Last name</label>
+                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium">Roll number (optional)</label>
+                  <Input value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="e.g. 12" />
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Last name</label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Roll number (optional)</label>
-                <Input value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="e.g. 12" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={submit}>Add</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={submit}>Add</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
