@@ -125,41 +125,86 @@ function Students() {
           <h1 className="text-3xl font-bold tracking-tight">Students</h1>
           <p className="text-muted-foreground">All your students with attendance performance.</p>
         </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !classId) setClassId(classes[0]?.id ?? ""); }}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="shadow-soft" disabled={classes.length === 0}>
-              <Plus className="mr-2 h-4 w-4" /> Add student
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add student</DialogTitle></DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Class</label>
-                <Select value={classId} onValueChange={setClassId}>
-                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                  <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportStudents} disabled={list.length === 0}>
+            <Download className="mr-2 h-4 w-4" /> Export
+          </Button>
+          <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (o && !importClassId) setImportClassId(classes[0]?.id ?? ""); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" disabled={classes.length === 0}>
+                <Upload className="mr-2 h-4 w-4" /> Import CSV
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Import students from CSV</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Add to class</label>
+                  <Select value={importClassId} onValueChange={setImportClassId}>
+                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                    <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Upload .csv file</label>
+                  <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} className="block w-full text-sm" />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Columns: <code>First name, Last name, Roll number</code> (header optional). A single <code>Name</code> column is also accepted.
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Or paste CSV</label>
+                  <textarea
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    rows={6}
+                    placeholder={"First name,Last name,Roll number\nAva,Lopez,03\nLeo,Murphy,04"}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">First name</label>
-                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setImportOpen(false)}>Cancel</Button>
+                <Button onClick={runImport} disabled={!importText.trim()}>Import</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o && !classId) setClassId(classes[0]?.id ?? ""); }}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="shadow-soft" disabled={classes.length === 0}>
+                <Plus className="mr-2 h-4 w-4" /> Add student
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add student</DialogTitle></DialogHeader>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium">Class</label>
+                  <Select value={classId} onValueChange={setClassId}>
+                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                    <SelectContent>{classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">First name</label>
+                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Last name</label>
+                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium">Roll number (optional)</label>
+                  <Input value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="e.g. 12" />
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Last name</label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Roll number (optional)</label>
-                <Input value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="e.g. 12" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={submit}>Add</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={submit}>Add</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
