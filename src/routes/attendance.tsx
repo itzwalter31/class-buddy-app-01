@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { useStore, store, type AttendanceStatus } from "@/lib/store";
+import { useStore, store, downloadCSV, type AttendanceStatus } from "@/lib/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
