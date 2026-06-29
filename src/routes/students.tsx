@@ -55,6 +55,69 @@ function Students() {
     toast.success("Student added.");
   }
 
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImportText(String(reader.result ?? ""));
+    };
+    reader.readAsText(f);
+    e.target.value = "";
+  }
+
+  function runImport() {
+    if (!importClassId) { toast.error("Pick a class first."); return; }
+    const rows = parseCSV(importText);
+    if (rows.length === 0) { toast.error("No rows found."); return; }
+    // Detect header
+    const first = rows[0].map((c) => c.trim().toLowerCase());
+    const hasHeader = first.some((c) => ["first name", "firstname", "first", "last name", "lastname", "last", "name", "roll", "roll number", "rollnumber"].includes(c));
+    let firstIdx = 0, lastIdx = 1, rollIdx = 2, nameIdx = -1;
+    let dataStart = 0;
+    if (hasHeader) {
+      dataStart = 1;
+      firstIdx = first.findIndex((c) => c === "first name" || c === "firstname" || c === "first");
+      lastIdx = first.findIndex((c) => c === "last name" || c === "lastname" || c === "last");
+      nameIdx = first.findIndex((c) => c === "name" || c === "full name" || c === "fullname");
+      rollIdx = first.findIndex((c) => c === "roll" || c === "roll number" || c === "rollnumber" || c === "roll no" || c === "id");
+    }
+    const items: { classId: string; firstName: string; lastName: string; rollNumber?: string }[] = [];
+    for (let i = dataStart; i < rows.length; i++) {
+      const r = rows[i];
+      let fn = "", ln = "";
+      if (firstIdx >= 0 && lastIdx >= 0) {
+        fn = (r[firstIdx] ?? "").trim();
+        ln = (r[lastIdx] ?? "").trim();
+      } else if (nameIdx >= 0) {
+        const parts = (r[nameIdx] ?? "").trim().split(/\s+/);
+        fn = parts[0] ?? ""; ln = parts.slice(1).join(" ");
+      } else {
+        // assume 2-3 columns: first, last, roll
+        fn = (r[0] ?? "").trim();
+        ln = (r[1] ?? "").trim();
+      }
+      const roll = rollIdx >= 0 ? (r[rollIdx] ?? "").trim() : (r[2] ?? "").trim();
+      if (!fn && !ln) continue;
+      items.push({ classId: importClassId, firstName: fn, lastName: ln, rollNumber: roll || undefined });
+    }
+    if (items.length === 0) { toast.error("No valid student rows."); return; }
+    store.addStudentsBulk(items);
+    toast.success(`Imported ${items.length} students.`);
+    setImportText("");
+    setImportOpen(false);
+  }
+
+  function exportStudents() {
+    const rows: (string | number)[][] = [["First name", "Last name", "Roll number", "Class", "Attendance rate %", "Records"]];
+    for (const s of list) {
+      const cls = classes.find((c) => c.id === s.classId);
+      const stats = studentRate(s.id);
+      rows.push([s.firstName, s.lastName, s.rollNumber ?? "", cls?.name ?? "", stats.total ? Math.round(stats.rate) : "", stats.total]);
+    }
+    downloadCSV(`students-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
