@@ -1,8 +1,11 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { CalendarCheck, GraduationCap, LayoutDashboard, Users, BarChart3 } from "lucide-react";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { useEffect, type ReactNode } from "react";
+import { CalendarCheck, GraduationCap, LayoutDashboard, Users, BarChart3, LogOut } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 const nav = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
@@ -14,10 +17,38 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) navigate({ to: "/auth" });
+  }, [loading, user, navigate]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+
+  const displayName =
+    (user.user_metadata?.full_name as string | undefined) ?? user.email ?? "Teacher";
+  const initials = displayName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/auth" });
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 md:flex">
         <div className="mb-8 flex items-center gap-2 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-soft">
@@ -49,19 +80,26 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="mt-auto rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
-          Data is saved locally on this device. Enable Cloud later to sync across teachers.
+        <div className="mt-auto space-y-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+              {initials || "T"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{displayName}</div>
+              <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={signOut} title="Sign out" className="h-8 w-8">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </aside>
 
-      {/* Main */}
       <main className="pb-24 md:ml-64 md:pb-8">
-        <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
-          {children}
-        </div>
+        <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">{children}</div>
       </main>
 
-      {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar/95 backdrop-blur md:hidden">
         <div className="grid grid-cols-5">
           {nav.map((item) => {

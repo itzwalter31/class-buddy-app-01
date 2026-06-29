@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudentsRouteImport } from './routes/students'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ClassesRouteImport } from './routes/classes'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -30,6 +31,11 @@ const ClassesRoute = ClassesRouteImport.update({
   path: '/classes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AttendanceRoute = AttendanceRouteImport.update({
   id: '/attendance',
   path: '/attendance',
@@ -44,6 +50,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attendance': typeof AttendanceRoute
+  '/auth': typeof AuthRoute
   '/classes': typeof ClassesRoute
   '/reports': typeof ReportsRoute
   '/students': typeof StudentsRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/attendance': typeof AttendanceRoute
+  '/auth': typeof AuthRoute
   '/classes': typeof ClassesRoute
   '/reports': typeof ReportsRoute
   '/students': typeof StudentsRoute
@@ -59,21 +67,36 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/attendance': typeof AttendanceRoute
+  '/auth': typeof AuthRoute
   '/classes': typeof ClassesRoute
   '/reports': typeof ReportsRoute
   '/students': typeof StudentsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/attendance' | '/classes' | '/reports' | '/students'
+  fullPaths:
+    | '/'
+    | '/attendance'
+    | '/auth'
+    | '/classes'
+    | '/reports'
+    | '/students'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/attendance' | '/classes' | '/reports' | '/students'
-  id: '__root__' | '/' | '/attendance' | '/classes' | '/reports' | '/students'
+  to: '/' | '/attendance' | '/auth' | '/classes' | '/reports' | '/students'
+  id:
+    | '__root__'
+    | '/'
+    | '/attendance'
+    | '/auth'
+    | '/classes'
+    | '/reports'
+    | '/students'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AttendanceRoute: typeof AttendanceRoute
+  AuthRoute: typeof AuthRoute
   ClassesRoute: typeof ClassesRoute
   ReportsRoute: typeof ReportsRoute
   StudentsRoute: typeof StudentsRoute
@@ -102,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClassesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/attendance': {
       id: '/attendance'
       path: '/attendance'
@@ -122,6 +152,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AttendanceRoute: AttendanceRoute,
+  AuthRoute: AuthRoute,
   ClassesRoute: ClassesRoute,
   ReportsRoute: ReportsRoute,
   StudentsRoute: StudentsRoute,
