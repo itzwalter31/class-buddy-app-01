@@ -169,6 +169,9 @@ function Attendance() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{marked} marked · {unmarked} pending</span>
+          <Button variant="outline" size="sm" onClick={exportDay} disabled={classStudents.length === 0}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
+          </Button>
           {marked > 0 && (
             <Button variant="ghost" size="sm" onClick={resetDay}>Reset day</Button>
           )}
