@@ -6,11 +6,14 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useNavigate,
+  useLocation,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { useAuth } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -117,6 +120,34 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    // Don't redirect if still loading
+    if (loading) return;
+
+    // Don't redirect if on auth page
+    if (pathname === "/auth") return;
+
+    // Redirect to auth if no user
+    if (!user) {
+      navigate({ to: "/auth", replace: true });
+    }
+  }, [user, loading, pathname, navigate]);
+
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

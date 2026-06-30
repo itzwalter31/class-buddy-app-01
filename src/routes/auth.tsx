@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarCheck } from "lucide-react";
 import { toast } from "sonner";
+import { createUserProfile } from "@/lib/user-service";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -37,7 +38,7 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -46,6 +47,12 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        
+        // Create user profile in the users table
+        if (data.user) {
+          await createUserProfile(data.user, name);
+        }
+        
         toast.success("Account created. You're signed in.");
         navigate({ to: "/" });
       } else {
