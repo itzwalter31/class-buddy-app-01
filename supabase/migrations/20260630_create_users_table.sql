@@ -31,6 +31,11 @@ EXECUTE FUNCTION update_users_updated_at();
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies
+-- Allow users to insert their own profile (during signup)
+CREATE POLICY "Users can create their own profile"
+  ON users FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
 -- Users can read their own profile
 CREATE POLICY "Users can read their own profile"
   ON users FOR SELECT
@@ -48,5 +53,7 @@ CREATE POLICY "Admins can read all profiles"
   USING (
     auth.uid() IN (
       SELECT id FROM users WHERE role = 'admin'
+    )
+  );
     )
   );
