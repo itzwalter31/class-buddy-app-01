@@ -6,7 +6,9 @@ import type { User } from "@supabase/supabase-js";
  */
 export async function createUserProfile(user: User, fullName?: string) {
   try {
-    const { error } = await supabase.from("users").insert([
+    console.log("Creating user profile for:", user.id);
+    
+    const { error, data } = await supabase.from("users").insert([
       {
         id: user.id,
         email: user.email || "",
@@ -15,9 +17,14 @@ export async function createUserProfile(user: User, fullName?: string) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-    ]);
+    ]).select();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase insert error:", error);
+      throw new Error(`Failed to create profile: ${error.message}`);
+    }
+    
+    console.log("User profile created successfully:", data);
     return { success: true };
   } catch (error) {
     console.error("Error creating user profile:", error);
