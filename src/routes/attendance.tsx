@@ -184,6 +184,23 @@ function Attendance() {
         </div>
       </div>
 
+      {/* Captured photo display */}
+      {capturedPhoto && (
+        <Card className="overflow-hidden">
+          <CardContent className="relative p-0">
+            <img src={capturedPhoto} alt="Class capture" className="h-64 w-full object-cover" />
+            <button
+              onClick={() => setCapturedPhoto(null)}
+              className="absolute right-2 top-2 rounded-full bg-destructive/90 p-1 text-white transition-all hover:bg-destructive"
+              title="Remove photo"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="p-3 text-center text-xs text-muted-foreground">Captured on {date}</div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Student list */}
       <div className="space-y-2">
         {filteredStudents.map((s) => {
@@ -233,6 +250,13 @@ function Attendance() {
           <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No students match your search.</CardContent></Card>
         )}
       </div>
+
+      {/* Camera dialog */}
+      <CameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onCapture={(photo) => {
+        setCapturedPhoto(photo);
+        setCameraOpen(false);
+        toast.success("Photo captured!");
+      }} />
     </div>
   );
 }
@@ -253,5 +277,123 @@ function EmptyState({ title, description, actionHref, actionLabel }: { title: st
       <p className="mt-2 max-w-sm text-muted-foreground">{description}</p>
       <Button asChild className="mt-6"><a href={actionHref}>{actionLabel}</a></Button>
     </div>
+  );
+}
+
+interface CameraDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCapture: (photo: string) => void;
+}
+
+function CameraDialog({ open, onOpenChange, onCapture }: CameraDialogProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setCameraReady(false);
+      setError(null);
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+
+    const startCamera = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          setCameraReady(true);
+          setError(null);
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to access camera. Check permissions.",
+        );
+        toast.error("Camera access denied");
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [open]);
+
+  const handleCapture = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext("2d");
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0);
+        const photo = canvasRef.current.toDataURL("image/jpeg");
+        onCapture(photo);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Capture Class Photo</DialogTitle>
+        </DialogHeader>
+
+        {error ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            {error}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative overflow-hidden rounded-lg bg-black">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="h-96 w-full object-cover"
+              />
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+
+            {cameraReady && (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleCapture}
+                  className="flex-1"
+                  size="lg"
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  Capture Photo
+                </Button>
+                <Button
+                  onClick={() => onOpenChange(false)}
+                  variant="outline"
+                  size="lg"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+
+            {!cameraReady && !error && (
+              <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
+                Initializing camera...
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
