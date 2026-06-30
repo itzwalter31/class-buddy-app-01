@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useStore, store, downloadCSV, type AttendanceStatus } from "@/lib/store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare, Download } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, FileCheck, Search, CalendarDays, CheckSquare, Download, Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -50,6 +51,8 @@ function Attendance() {
   const classId = search.classId ?? classes[0]?.id ?? "";
   const date = search.date ?? new Date().toISOString().slice(0, 10);
   const [query, setQuery] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
   const klass = classes.find((c) => c.id === classId);
   const classStudents = useMemo(
@@ -117,7 +120,7 @@ function Attendance() {
 
       {/* Controls */}
       <Card>
-        <CardContent className="grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-end sm:p-5">
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end sm:p-5">
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Class</label>
             <Select value={classId} onValueChange={(v) => navigate({ search: { classId: v, date } })}>
@@ -147,6 +150,9 @@ function Attendance() {
               />
             </div>
           </div>
+          <Button size="lg" onClick={() => setCameraOpen(true)} variant="outline" className="h-11">
+            <Camera className="mr-2 h-4 w-4" /> Capture
+          </Button>
           <Button size="lg" onClick={markAllPresent} className="h-11 shadow-soft">
             <CheckSquare className="mr-2 h-4 w-4" /> Mark all present
           </Button>
