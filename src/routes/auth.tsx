@@ -29,9 +29,40 @@ function AuthPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    async function handleRedirect() {
+      if (typeof window === "undefined") return;
+      const shouldHandleHash = window.location.hash.includes("access_token") || window.location.hash.includes("error");
+
+      if (shouldHandleHash) {
+        setBusy(true);
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        setBusy(false);
+
+        if (window.location.hash) {
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
+
+        if (error) {
+          const message =
+            error.message ||
+            (window.location.hash.includes("otp_expired")
+              ? "This sign-in link expired. Request a new email to continue."
+              : "Invalid or expired confirmation link.");
+          setStatusMessage(message);
+          return;
+        }
+
+        if (data.session) {
+          navigate({ to: "/" });
+          return;
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
       if (data.session) navigate({ to: "/" });
-    });
+    }
+
+    handleRedirect();
   }, [navigate]);
 
   async function submit(e: React.FormEvent) {
@@ -43,7 +74,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${window.location.origin}/auth`,
             data: { full_name: name },
           },
         });
@@ -67,8 +98,18 @@ function AuthPage() {
         if (error) throw error;
         navigate({ to: "/" });
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed");
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const status = err?.status ?? err?.statusCode ?? null;
+
+      if (status === 429 || /too many requests|rate limit|rate-limited/i.test(msg)) {
+        const friendly =
+          "Too many requests. You've made several attempts — wait a few minutes and try again.";
+        setStatusMessage(friendly);
+        toast.error(friendly);
+      } else {
+        toast.error(msg || "Authentication failed");
+      }
     } finally {
       setBusy(false);
     }
