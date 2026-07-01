@@ -12,8 +12,9 @@ type SignInOptions = {
 export const lovable = {
   auth: {
     signInWithOAuth: async (provider: "google" | "apple" | "microsoft" | "lovable", opts?: SignInOptions) => {
+      const defaultRedirect = typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined;
       const result = await lovableAuth.signInWithOAuth(provider, {
-        redirect_uri: opts?.redirect_uri,
+        redirect_uri: opts?.redirect_uri ?? defaultRedirect,
         extraParams: {
           ...opts?.extraParams,
         },
