@@ -55,5 +55,3 @@ CREATE POLICY "Admins can read all profiles"
       SELECT id FROM users WHERE role = 'admin'
     )
   );
-    )
-  );

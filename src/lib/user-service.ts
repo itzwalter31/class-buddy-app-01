@@ -7,7 +7,13 @@ import type { User } from "@supabase/supabase-js";
 export async function createUserProfile(user: User, fullName?: string) {
   try {
     console.log("Creating user profile for:", user.id);
-    
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      console.error("No active Supabase session found when creating profile.");
+      throw new Error("Unable to create profile because there is no active session.");
+    }
+
     const { error, data } = await supabase.from("users").insert([
       {
         id: user.id,

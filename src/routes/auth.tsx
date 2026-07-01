@@ -26,6 +26,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -47,12 +48,18 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        
-        // Create user profile in the users table
-        if (data.user) {
-          await createUserProfile(data.user, name);
+        if (!data.user) throw new Error("Signup succeeded but no user was returned.");
+
+        if (!data.session) {
+          setStatusMessage(
+            "Account created. Check your email for a confirmation link before signing in."
+          );
+          toast.success("Check your email to complete signup.");
+          return;
         }
-        
+
+        // Create user profile in the users table
+        await createUserProfile(data.user, name);
         toast.success("Account created. You're signed in.");
         navigate({ to: "/" });
       } else {
@@ -69,6 +76,7 @@ function AuthPage() {
 
   async function google() {
     setBusy(true);
+    setStatusMessage(null);
     const res = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin,
     });
@@ -109,6 +117,12 @@ function AuthPage() {
             <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" /> or email <span className="h-px flex-1 bg-border" />
             </div>
+
+            {statusMessage ? (
+              <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+                {statusMessage}
+              </div>
+            ) : null}
 
             <form className="space-y-3" onSubmit={submit}>
               {mode === "signup" && (
