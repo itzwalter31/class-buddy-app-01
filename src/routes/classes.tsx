@@ -29,13 +29,20 @@ function Classes() {
   const students = useStore((s) => s.students);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [subject, setSubject] = useState("");
+  const [subjectsText, setSubjectsText] = useState("");
+  const [stream, setStream] = useState("");
 
   function submit() {
     if (!name.trim()) return;
-    store.addClass(name.trim(), subject.trim() || undefined);
+    const subjects = subjectsText
+      .split(",")
+      .map((subject) => subject.trim())
+      .filter(Boolean);
+
+    store.addClass(name.trim(), subjects, stream.trim() || undefined);
     setName("");
-    setSubject("");
+    setSubjectsText("");
+    setStream("");
     setOpen(false);
     toast.success("Class created.");
   }
@@ -59,8 +66,12 @@ function Classes() {
                 <Input placeholder="e.g. Grade 7 — Section A" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Subject (optional)</label>
-                <Input placeholder="e.g. Mathematics" value={subject} onChange={(e) => setSubject(e.target.value)} />
+                <label className="mb-1 block text-sm font-medium">Subjects (comma-separated)</label>
+                <Input placeholder="e.g. Mathematics, Physics" value={subjectsText} onChange={(e) => setSubjectsText(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Stream (optional)</label>
+                <Input placeholder="e.g. Science" value={stream} onChange={(e) => setStream(e.target.value)} />
               </div>
             </div>
             <DialogFooter>
@@ -79,7 +90,10 @@ function Classes() {
               <div className="h-2 w-full" style={{ backgroundColor: c.color }} />
               <CardContent className="p-5">
                 <h3 className="font-semibold leading-tight">{c.name}</h3>
-                {c.subject && <p className="text-sm text-muted-foreground">{c.subject}</p>}
+                {c.stream && <p className="text-sm text-muted-foreground">Stream: {c.stream}</p>}
+                {c.subjects?.length ? (
+                  <p className="text-sm text-muted-foreground">Subjects: {c.subjects.join(", ")}</p>
+                ) : null}
                 <div className="mt-4 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Users className="h-3.5 w-3.5" /> {count} students

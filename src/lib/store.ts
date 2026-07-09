@@ -5,7 +5,8 @@ export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 export interface SchoolClass {
   id: string;
   name: string;
-  subject?: string;
+  subjects: string[];
+  stream?: string;
   color: string;
   createdAt: string;
 }
@@ -52,43 +53,85 @@ function storageKey() {
 }
 
 function seed(): State {
-  const c1 = crypto.randomUUID();
-  const c2 = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
-  const names1 = [
+  const classIds = Array.from({ length: 6 }, () => crypto.randomUUID());
+  const classDefinitions = [
+    { name: "Senior One", subjects: ["Mathematics", "Physics"], stream: "Science" },
+    { name: "Senior Two", subjects: ["English", "Literature"], stream: "Arts" },
+    { name: "Senior Three", subjects: ["Biology", "Chemistry"], stream: "Science" },
+    { name: "Senior Four", subjects: ["Physics", "Mathematics"], stream: "Science" },
+    { name: "Senior Five", subjects: ["Chemistry", "Biology"], stream: "Commercial" },
+    { name: "Senior Six", subjects: ["History", "Geography"], stream: "Arts" },
+  ];
+  const studentNames = [
     ["Amelia", "Carter"], ["Liam", "Hughes"], ["Noah", "Patel"], ["Olivia", "Kim"],
     ["Ethan", "Brooks"], ["Mia", "Nguyen"], ["Lucas", "Garcia"], ["Sophia", "Ahmed"],
     ["Aiden", "Walker"], ["Isla", "Rivera"], ["Maya", "Cohen"], ["Daniel", "Okafor"],
-  ];
-  const names2 = [
     ["Zoe", "Bennett"], ["Owen", "Sato"], ["Ava", "Lopez"], ["Henry", "Park"],
     ["Charlotte", "Diallo"], ["Jack", "Reyes"], ["Lily", "Singh"], ["Leo", "Murphy"],
+    ["Grace", "Musa"], ["Noah", "Lem"], ["Emma", "Adeyemi"], ["Ethan", "Owens"],
   ];
-  const students: Student[] = [
-    ...names1.map(([f, l], i) => ({ id: crypto.randomUUID(), classId: c1, firstName: f, lastName: l, rollNumber: String(i + 1).padStart(2, "0") })),
-    ...names2.map(([f, l], i) => ({ id: crypto.randomUUID(), classId: c2, firstName: f, lastName: l, rollNumber: String(i + 1).padStart(2, "0") })),
-  ];
+
+  const students: Student[] = studentNames.flatMap(([f, l], i) => {
+    const classIndex = i % classIds.length;
+    return [{
+      id: crypto.randomUUID(),
+      classId: classIds[classIndex],
+      firstName: f,
+      lastName: l,
+      rollNumber: String((Math.floor(i / classIds.length) + 1)).padStart(2, "0"),
+    }];
+  });
+
   const attendance: AttendanceRecord[] = [];
-  const classStudents = students.filter((s) => s.classId === c1);
   for (let d = 14; d >= 1; d--) {
     const date = new Date();
     date.setDate(date.getDate() - d);
     if (date.getDay() === 0 || date.getDay() === 6) continue;
     const dateStr = date.toISOString().slice(0, 10);
-    for (const s of classStudents) {
+
+    for (const student of students) {
       const r = Math.random();
       const status: AttendanceStatus = r < 0.82 ? "present" : r < 0.9 ? "late" : r < 0.97 ? "absent" : "excused";
-      attendance.push({ id: `${c1}:${dateStr}:${s.id}`, classId: c1, studentId: s.id, date: dateStr, status });
+      attendance.push({ id: `${student.classId}:${dateStr}:${student.id}`, classId: student.classId, studentId: student.id, date: dateStr, status });
     }
   }
+
   return {
-    classes: [
-      { id: c1, name: "Grade 7 — Section A", subject: "Mathematics", color: COLORS[0], createdAt: today },
-      { id: c2, name: "Grade 9 — Section B", subject: "Science", color: COLORS[1], createdAt: today },
-    ],
+    classes: classDefinitions.map((classDef, index) => ({
+      id: classIds[index],
+      name: classDef.name,
+      subjects: classDef.subjects,
+      stream: classDef.stream,
+      color: COLORS[index % COLORS.length],
+      createdAt: today,
+    })),
     students,
     attendance,
   };
+}
+
+function migrateLegacyClasses(parsed: State): State {
+  const classes = parsed.classes.map((c) => {
+    if ((c as any).subject && !c.subjects?.length) {
+      return {
+        ...c,
+        subjects: [(c as any).subject].filter(Boolean),
+        stream: c.stream ?? undefined,
+      };
+    }
+    return c;
+  });
+
+  return { ...parsed, classes };
+}
+
+function isLegacySeed(state: State) {
+  return (
+    state.classes.length === 2 &&
+    state.classes.some((c) => c.name === "Grade 7 — Section A") &&
+    state.classes.some((c) => c.name === "Grade 9 — Section B")
+  );
 }
 
 function load(): State {
@@ -101,9 +144,28 @@ function load(): State {
       localStorage.setItem(key, JSON.stringify(seeded));
       return seeded;
     }
-    return JSON.parse(raw) as State;
+      let parsed = JSON.parse(raw) as State;
+    if (
+      !parsed.classes?.length &&
+      !parsed.students?.length &&
+      !parsed.attendance?.length
+    ) {
+      const seeded = seed();
+      localStorage.setItem(key, JSON.stringify(seeded));
+      return seeded;
+    }
+    parsed = migrateLegacyClasses(parsed);
+    if (isLegacySeed(parsed)) {
+      const seeded = seed();
+      localStorage.setItem(key, JSON.stringify(seeded));
+      return seeded;
+    }
+    localStorage.setItem(key, JSON.stringify(parsed));
+    return parsed;
   } catch {
-    return EMPTY;
+    const seeded = seed();
+    localStorage.setItem(key, JSON.stringify(seeded));
+    return seeded;
   }
 }
 
@@ -137,11 +199,12 @@ export function useStore<T>(selector: (s: State) => T): T {
 
 export const store = {
   getState: () => state,
-  addClass(name: string, subject?: string) {
+  addClass(name: string, subjects: string[], stream?: string) {
     const c: SchoolClass = {
       id: crypto.randomUUID(),
       name,
-      subject,
+      subjects,
+      stream,
       color: COLORS[state.classes.length % COLORS.length],
       createdAt: new Date().toISOString().slice(0, 10),
     };

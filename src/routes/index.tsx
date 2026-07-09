@@ -89,7 +89,10 @@ function Dashboard() {
                       <span className="text-sm font-semibold text-foreground">{rate}%</span>
                     </div>
                     <h3 className="font-semibold leading-tight">{c.name}</h3>
-                    {c.subject && <p className="text-sm text-muted-foreground">{c.subject}</p>}
+                    {c.stream && <p className="text-sm text-muted-foreground">Stream: {c.stream}</p>}
+                    {c.subjects?.length ? (
+                      <p className="text-sm text-muted-foreground">Subjects: {c.subjects.join(", ")}</p>
+                    ) : null}
                     <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                       <span>{cStudents.length} students</span>
                       <span className="font-medium text-primary group-hover:underline">Take roll →</span>
