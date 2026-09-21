@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import { Prisma } from '@prisma/client';
 import { createStudent, deleteStudent, getStudentById, listStudents, updateStudent } from '../modules/students/student.service.js';
 import { createStudentSchema, studentQuerySchema, updateStudentSchema } from '../modules/students/student.validation.js';
-import { deletePhoto, listPhotos, savePhoto } from '../modules/photos/photo.service.js';
+import { deletePhoto, listPhotos, savePhoto, savePhotos } from '../modules/photos/photo.service.js';
 import { errorResponse, successResponse } from '../utils/responses.js';
 
 export async function listStudentsController(req: Request, res: Response) {
@@ -17,7 +18,10 @@ export async function listStudentsController(req: Request, res: Response) {
     const result = await listStudents(parsed.data);
     res.json(successResponse(result, 'Students fetched successfully'));
   } catch (error) {
-    console.error(error);
+    console.error('Failed to fetch students', {
+      query: req.query,
+      error,
+    });
     res.status(500).json(errorResponse('Failed to fetch students'));
   }
 }
@@ -102,24 +106,39 @@ export async function uploadStudentPhotos(req: Request, res: Response) {
       return;
     }
 
-    const savedPhotos = [];
-
-    for (const [index, file] of files.entries()) {
-      const imageUrl = path.posix.join('uploads', 'students', path.basename(file.path));
-      const photo = await savePhoto({
-        studentId: req.params.id,
-        imageUrl,
-        imageType: file.mimetype,
-        embeddingStatus: 'PENDING',
-        embeddingVector: null,
-        isPrimary: index === 0,
-      });
-      savedPhotos.push(photo);
+    const student = await getStudentById(req.params.id);
+    if (!student) {
+      res.status(404).json(errorResponse('Student not found', 404));
+      return;
     }
 
+    const photoInputs = files.map((file, index) => ({
+      studentId: req.params.id,
+      imageUrl: path.posix.join('uploads', 'students', path.basename(file.path)),
+      embeddingStatus: 'PENDING' as const,
+      embeddingVector: null,
+      isPrimary: index === 0,
+    }));
+
+    const savedPhotos = await savePhotos(photoInputs);
     res.status(201).json(successResponse(savedPhotos, 'Photos uploaded successfully'));
   } catch (error) {
-    console.error(error);
+    console.error('Failed to upload photos', {
+      studentId: req.params.id,
+      fileCount: (req.files as Express.Multer.File[] | undefined)?.length,
+      error,
+    });
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      res.status(500).json(errorResponse('Database error while uploading photos', 500, { code: error.code }));
+      return;
+    }
+
+    if (error instanceof Error) {
+      res.status(500).json(errorResponse(error.message || 'Failed to upload photos'));
+      return;
+    }
+
     res.status(500).json(errorResponse('Failed to upload photos'));
   }
 }

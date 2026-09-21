@@ -17,6 +17,7 @@ export interface Student {
   firstName: string;
   lastName: string;
   rollNumber?: string;
+  studentNumber?: string;
 }
 
 export interface AttendanceRecord {
@@ -235,6 +236,11 @@ export const store = {
     state = { ...state, students: [...state.students, ...added] };
     persist();
     return added;
+  },
+  setStudents(students: Student[]) {
+    state = { ...state, students };
+    persist();
+    return students;
   },
   updateStudent(id: string, patch: Partial<Student>) {
     state = { ...state, students: state.students.map((s) => (s.id === id ? { ...s, ...patch } : s)) };

@@ -1,11 +1,16 @@
+// eslint-disable-next-line prettier/prettier
+// eslint-disable-next-line prettier/prettier
+// eslint-disable-next-line prettier/prettier
 import { z } from 'zod';
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
+// eslint-disable-next-line prettier/prettier
 });
 
 export const createStudentSchema = z.object({
+  // eslint-disable-next-line prettier/prettier
   studentNumber: z.string().trim().min(1, 'Student number is required'),
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),

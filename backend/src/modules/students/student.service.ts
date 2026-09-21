@@ -11,11 +11,8 @@ export interface StudentCreateInput {
   otherNames?: string | null;
   gender: StudentGender;
   dateOfBirth: string;
-  email: string;
-  phone: string;
-  address?: string | null;
+  schoolId?: string | null;
   classId?: string | null;
-  status?: StudentStatus;
 }
 
 export interface StudentUpdateInput extends Partial<StudentCreateInput> {}
@@ -60,7 +57,20 @@ export async function listStudents(params: StudentQueryParams): Promise<StudentL
       orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
-      include: { photos: true },
+      select: {
+        id: true,
+        studentNumber: true,
+        firstName: true,
+        lastName: true,
+        otherNames: true,
+        gender: true,
+        dateOfBirth: true,
+        schoolId: true,
+        classId: true,
+        createdAt: true,
+        updatedAt: true,
+        photos: true,
+      },
     }),
   ]);
 
@@ -78,7 +88,20 @@ export async function listStudents(params: StudentQueryParams): Promise<StudentL
 export async function getStudentById(id: string) {
   return prisma.student.findUnique({
     where: { id },
-    include: { photos: true },
+    select: {
+      id: true,
+      studentNumber: true,
+      firstName: true,
+      lastName: true,
+      otherNames: true,
+      gender: true,
+      dateOfBirth: true,
+      schoolId: true,
+      classId: true,
+      createdAt: true,
+      updatedAt: true,
+      photos: true,
+    },
   });
 }
 
@@ -91,11 +114,8 @@ export async function createStudent(input: StudentCreateInput) {
       otherNames: input.otherNames ?? null,
       gender: input.gender,
       dateOfBirth: new Date(input.dateOfBirth),
-      email: input.email,
-      phone: input.phone,
-      address: input.address ?? null,
+      schoolId: input.schoolId ?? null,
       classId: input.classId ?? null,
-      status: input.status ?? 'ACTIVE',
     },
   });
 }
@@ -112,20 +132,43 @@ export async function updateStudent(id: string, input: StudentUpdateInput) {
   if (input.otherNames !== undefined) data.otherNames = input.otherNames;
   if (input.gender !== undefined) data.gender = input.gender;
   if (input.dateOfBirth !== undefined) data.dateOfBirth = new Date(input.dateOfBirth);
-  if (input.email !== undefined) data.email = input.email;
-  if (input.phone !== undefined) data.phone = input.phone;
-  if (input.address !== undefined) data.address = input.address;
+  if (input.schoolId !== undefined) data.schoolId = input.schoolId;
   if (input.classId !== undefined) data.classId = input.classId;
-  if (input.status !== undefined) data.status = input.status;
 
   if (!Object.keys(data).length) {
-    return prisma.student.findUnique({ where: { id }, include: { photos: true } });
+    return prisma.student.findUnique({ where: { id }, select: {
+      id: true,
+      studentNumber: true,
+      firstName: true,
+      lastName: true,
+      otherNames: true,
+      gender: true,
+      dateOfBirth: true,
+      schoolId: true,
+      classId: true,
+      createdAt: true,
+      updatedAt: true,
+      photos: true,
+    } });
   }
 
   return prisma.student.update({
     where: { id },
     data,
-    include: { photos: true },
+    select: {
+      id: true,
+      studentNumber: true,
+      firstName: true,
+      lastName: true,
+      otherNames: true,
+      gender: true,
+      dateOfBirth: true,
+      schoolId: true,
+      classId: true,
+      createdAt: true,
+      updatedAt: true,
+      photos: true,
+    },
   });
 }
 

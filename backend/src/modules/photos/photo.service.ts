@@ -6,7 +6,6 @@ export type EmbeddingStatus = 'PENDING' | 'COMPLETED' | 'FAILED';
 export interface StudentPhotoCreateInput {
   studentId: string;
   imageUrl: string;
-  imageType: string;
   embeddingStatus: EmbeddingStatus;
   embeddingVector?: string | null;
   isPrimary?: boolean;
@@ -31,11 +30,40 @@ export async function savePhoto(input: StudentPhotoCreateInput) {
     data: {
       studentId: input.studentId,
       imageUrl: input.imageUrl,
-      imageType: input.imageType,
       embeddingStatus: input.embeddingStatus,
       embeddingVector: input.embeddingVector ?? null,
       isPrimary: input.isPrimary ?? false,
     },
+  });
+}
+
+export async function savePhotos(inputs: StudentPhotoCreateInput[]) {
+  if (inputs.length === 0) return [];
+
+  return prisma.$transaction(async (tx) => {
+    const firstInput = inputs.find((input) => input.isPrimary);
+    if (firstInput) {
+      await tx.studentPhoto.updateMany({
+        where: { studentId: firstInput.studentId, isPrimary: true },
+        data: { isPrimary: false },
+      });
+    }
+
+    const createdPhotos = [];
+    for (const input of inputs) {
+      const photo = await tx.studentPhoto.create({
+        data: {
+          studentId: input.studentId,
+          imageUrl: input.imageUrl,
+          embeddingStatus: input.embeddingStatus,
+          embeddingVector: input.embeddingVector ?? null,
+          isPrimary: input.isPrimary ?? false,
+        },
+      });
+      createdPhotos.push(photo);
+    }
+
+    return createdPhotos;
   });
 }
 

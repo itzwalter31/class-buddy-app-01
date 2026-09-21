@@ -40,15 +40,16 @@ app.use('/api/students', studentRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
-
 // Start server
 async function bootstrap() {
-  app.listen(port, () => {
-    console.log(`API listening on http://localhost:${port}`);
-  });
+  try {
+    app.listen(port, () => {
+      console.log(`API listening on http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error("Bootstrap failed", error);
+    process.exit(1);
+  }
 }
 
-bootstrap().catch((error) => {
-  console.error('Bootstrap failed', error);
-  process.exit(1);
-});
+bootstrap();
