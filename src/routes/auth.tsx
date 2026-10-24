@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarCheck } from "lucide-react";
 import { toast } from "sonner";
-import { createUserProfile } from "@/lib/user-service";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -31,11 +30,12 @@ function AuthPage() {
   useEffect(() => {
     async function handleRedirect() {
       if (typeof window === "undefined") return;
-      const shouldHandleHash = window.location.hash.includes("access_token") || window.location.hash.includes("error");
+      const shouldHandleHash =
+        window.location.hash.includes("access_token") || window.location.hash.includes("error");
 
       if (shouldHandleHash) {
         setBusy(true);
-        const { data, error } = await supabase.auth.getSessionFromUrl();
+        const { data, error } = await supabase.auth.getSession();
         setBusy(false);
 
         if (window.location.hash) {
@@ -83,24 +83,31 @@ function AuthPage() {
 
         if (!data.session) {
           setStatusMessage(
-            "Account created. Check your email for a confirmation link before signing in."
+            "Account created. Check your email for a confirmation link before signing in.",
           );
           toast.success("Check your email to complete signup.");
           return;
         }
 
-        // Create user profile in the users table
-        await createUserProfile(data.user, name);
-        toast.success("Account created. You're signed in.");
-        navigate({ to: "/" });
+        setStatusMessage(
+          "Account created. A school administrator must assign your role and school before you can access Class Buddy.",
+        );
+        toast.info("Account created. Waiting for school administrator setup.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         navigate({ to: "/" });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const status = err?.status ?? err?.statusCode ?? null;
+      const status =
+        typeof err === "object" && err !== null
+          ? "status" in err && typeof err.status === "number"
+            ? err.status
+            : "statusCode" in err && typeof err.statusCode === "number"
+              ? err.statusCode
+              : null
+          : null;
 
       if (status === 429 || /too many requests|rate limit|rate-limited/i.test(msg)) {
         const friendly =
@@ -148,15 +155,24 @@ function AuthPage() {
               {mode === "signin" ? "Welcome back" : "Create your account"}
             </h1>
             <p className="mb-5 text-sm text-muted-foreground">
-              {mode === "signin" ? "Sign in to take attendance." : "Start tracking attendance in minutes."}
+              {mode === "signin"
+                ? "Sign in to take attendance."
+                : "Start tracking attendance in minutes."}
             </p>
 
-            <Button type="button" variant="outline" className="mb-4 w-full" onClick={google} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              className="mb-4 w-full"
+              onClick={google}
+              disabled={busy}
+            >
               Continue with Google
             </Button>
 
             <div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" /> or email <span className="h-px flex-1 bg-border" />
+              <span className="h-px flex-1 bg-border" /> or email{" "}
+              <span className="h-px flex-1 bg-border" />
             </div>
 
             {statusMessage ? (
@@ -169,16 +185,32 @@ function AuthPage() {
               {mode === "signup" && (
                 <div>
                   <label className="mb-1 block text-sm font-medium">Full name</label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Teacher" required />
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Jane Teacher"
+                    required
+                  />
                 </div>
               )}
               <div>
                 <label className="mb-1 block text-sm font-medium">Email</label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Password</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {mode === "signin" ? "Sign in" : "Create account"}
@@ -190,7 +222,9 @@ function AuthPage() {
               className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground"
               onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
             >
-              {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+              {mode === "signin"
+                ? "Don't have an account? Sign up"
+                : "Already have an account? Sign in"}
             </button>
           </CardContent>
         </Card>

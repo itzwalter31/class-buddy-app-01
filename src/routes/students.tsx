@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { apiFetch } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import {
   useStore,
   store,
@@ -110,8 +110,47 @@ async function fetchAndStoreStudents() {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function fetchClassesFromBackend() {
+  try {
+    const response = await apiFetch("/classes");
+    const rows: unknown[] = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response?.data?.data)
+        ? response.data.data
+        : [];
+
+    return rows.flatMap((item) => {
+      if (!isRecord(item)) {
+        return [];
+      }
+
+      const id = typeof item?.id === "string" ? item.id : "";
+      const name =
+        typeof item?.className === "string"
+          ? item.className
+          : typeof item?.class_name === "string"
+            ? item.class_name
+            : "";
+
+      return id && name
+        ? [{ id, name, color: "var(--primary)" }]
+        : [];
+    });
+  } catch (error) {
+    console.error("Failed to fetch classes from backend:", error);
+    toast.error("Failed to load classes.");
+    return [];
+  }
+}
+
 function Students() {
-  const classes = useStore((state) => state.classes);
+  const [classes, setClasses] = useState<
+    { id: string; name: string; color: string }[]
+  >([]);
   const students = useStore((state) => state.students);
 
   const [query, setQuery] = useState("");
@@ -121,9 +160,7 @@ function Students() {
   const [open, setOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
-  const [importClassId, setImportClassId] = useState(
-    classes[0]?.id ?? "",
-  );
+  const [importClassId, setImportClassId] = useState("");
   const [importText, setImportText] = useState("");
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -132,9 +169,7 @@ function Students() {
   const [lastName, setLastName] = useState("");
   const [rollNumber, setRollNumber] = useState("");
 
-  const [classId, setClassId] = useState(
-    classes[0]?.id ?? "",
-  );
+  const [classId, setClassId] = useState("");
 
   const [photoStudent, setPhotoStudent] =
     useState<any>(null);
@@ -147,21 +182,43 @@ function Students() {
 
   const photoRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetchAndStoreStudents();
-  }, []);
+
+useEffect(() => {
+  async function checkBackendAccess() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    console.log("Supabase session check:", {
+      hasSession: !!session,
+      hasAccessToken: !!session?.access_token,
+      sessionError: error?.message ?? null,
+    });
+
+    await fetchAndStoreStudents();
+
+    const backendClasses = await fetchClassesFromBackend();
+    console.log("Backend classes received:", backendClasses);
+
+    setClasses(backendClasses);
+  }
+
+  void checkBackendAccess();
+}, []);
+
 
   useEffect(() => {
     if (classes.length === 0) {
       return;
     }
 
-    if (!classId) {
-      setClassId(classes[0].id);
+    if (!classes.some((item) => item.id === classId)) {
+      setClassId(classes[0]?.id ?? "");
     }
 
-    if (!importClassId) {
-      setImportClassId(classes[0].id);
+    if (!classes.some((item) => item.id === importClassId)) {
+      setImportClassId(classes[0]?.id ?? "");
     }
   }, [classes, classId, importClassId]);
 
@@ -212,11 +269,9 @@ function Students() {
     if (
       !firstName.trim() ||
       !lastName.trim() ||
-      !classId
+      !classes.some((item) => item.id === classId)
     ) {
-      toast.error(
-        "First name, last name and class are required.",
-      );
+      toast.error("First name, last name and class are required.");
       return;
     }
 
@@ -237,7 +292,6 @@ function Students() {
             .toISOString()
             .split("T")[0],
           classId,
-          schoolId: null,
         }),
       });
 
@@ -265,7 +319,9 @@ function Students() {
       );
 
       toast.error(
-        "Failed to add student to backend.",
+        error instanceof Error
+          ? error.message
+          : "Failed to add student to backend.",
       );
     }
   }
@@ -293,7 +349,7 @@ function Students() {
   }
 
   async function runImport() {
-    if (!importClassId) {
+    if (!classes.some((item) => item.id === importClassId)) {
       toast.error("Pick a class first.");
       return;
     }
@@ -454,7 +510,6 @@ function Students() {
                 .toISOString()
                 .split("T")[0],
               classId: item.classId,
-              schoolId: null,
             }),
           });
 
@@ -600,9 +655,7 @@ function Students() {
         formData.append("photos", file);
       }
 
-      const url =
-        `http://localhost:4000/api/students/` +
-        `${photoStudent.id}/photos`;
+      const url = `${API_BASE_URL}/students/${photoStudent.id}/photos`;
 
       console.log("Uploading photos:", {
         url,

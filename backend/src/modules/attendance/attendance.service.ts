@@ -1,25 +1,79 @@
-import { query } from '../../config/database.js';
+import { Prisma, type Attendance } from '@prisma/client';
+import prisma from '../../config/prisma.js';
 
-export interface AttendanceRecord {
-  id: string;
-  student_id: string;
-  date: string;
-  time: string;
-  status: string;
-  captured_image: string | null;
-  confidence_score: number | null;
-  created_at: string;
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+
+export class AttendanceStudentNotFoundError extends Error {
+  constructor() {
+    super('Student not found in your school');
+    this.name = 'AttendanceStudentNotFoundError';
+  }
 }
 
-export async function createAttendanceRecord(input: { studentId: string; status: string; confidenceScore?: number | null; capturedImage?: string | null }) {
-  const rows = await query<AttendanceRecord>(
-    'INSERT INTO attendance (student_id, date, time, status, confidence_score, captured_image) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [input.studentId, new Date().toISOString().slice(0, 10), new Date().toTimeString().slice(0, 8), input.status, input.confidenceScore ?? null, input.capturedImage ?? null],
-  );
-  return rows[0] ?? null;
+export class DuplicateAttendanceError extends Error {
+  constructor() {
+    super('Attendance has already been recorded for this student today');
+    this.name = 'DuplicateAttendanceError';
+  }
 }
 
-export async function listTodayAttendance() {
-  const today = new Date().toISOString().slice(0, 10);
-  return query<AttendanceRecord>('SELECT * FROM attendance WHERE date = $1 ORDER BY time DESC', [today]);
+function utcDayRange(date: Date) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+export async function createAttendanceRecord(input: {
+  studentId: string;
+  schoolId: string;
+  status: AttendanceStatus;
+}): Promise<Attendance> {
+  const now = new Date();
+  const { start, end } = utcDayRange(now);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const student = await tx.student.findFirst({
+        where: { id: input.studentId, schoolId: input.schoolId },
+        select: { id: true },
+      });
+      if (!student) throw new AttendanceStudentNotFoundError();
+
+      const existing = await tx.attendance.findFirst({
+        where: {
+          studentId: input.studentId,
+          date: { gte: start, lt: end },
+        },
+        select: { id: true },
+      });
+      if (existing) throw new DuplicateAttendanceError();
+
+      return tx.attendance.create({
+        data: {
+          studentId: input.studentId,
+          date: now,
+          status: input.status,
+        },
+      });
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+      throw new DuplicateAttendanceError();
+    }
+    throw error;
+  }
+}
+
+export async function listTodayAttendance(schoolId: string) {
+  const { start, end } = utcDayRange(new Date());
+  return prisma.attendance.findMany({
+    where: {
+      date: { gte: start, lt: end },
+      student: { schoolId },
+    },
+    orderBy: { date: 'desc' },
+  });
 }

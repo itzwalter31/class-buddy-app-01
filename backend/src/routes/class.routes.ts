@@ -4,7 +4,7 @@ import { assignStudentToClassController, createClassController, deleteClassContr
 
 const router = Router();
 
-router.get('/', authenticateToken, requireRole('ADMIN', 'TEACHER', 'STUDENT'), listClassesController);
+router.get('/', authenticateToken, requireRole('ADMIN'), listClassesController);
 router.post('/', authenticateToken, requireRole('ADMIN'), createClassController);
 router.put('/:id', authenticateToken, requireRole('ADMIN'), updateClassController);
 router.delete('/:id', authenticateToken, requireRole('ADMIN'), deleteClassController);

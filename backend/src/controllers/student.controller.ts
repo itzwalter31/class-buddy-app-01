@@ -2,20 +2,34 @@ import type { Request, Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { Prisma } from '@prisma/client';
-import { createStudent, deleteStudent, getStudentById, listStudents, updateStudent } from '../modules/students/student.service.js';
+import { createStudent, deleteStudent, getStudentById, InvalidStudentClassError, listStudents, updateStudent } from '../modules/students/student.service.js';
 import { createStudentSchema, studentQuerySchema, updateStudentSchema } from '../modules/students/student.validation.js';
 import { deletePhoto, listPhotos, savePhoto, savePhotos } from '../modules/photos/photo.service.js';
 import { errorResponse, successResponse } from '../utils/responses.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
 
-export async function listStudentsController(req: Request, res: Response) {
+function isClassForeignKeyViolation(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2003' &&
+    String(error.meta?.field_name ?? '').toLowerCase().includes('classid')
+  );
+}
+
+export async function listStudentsController(req: AuthenticatedRequest, res: Response) {
   try {
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
     const parsed = studentQuerySchema.safeParse(req.query);
     if (!parsed.success) {
       res.status(400).json(errorResponse('Invalid query params', 400, parsed.error.flatten()));
       return;
     }
 
-    const result = await listStudents(parsed.data);
+    const result = await listStudents(parsed.data, req.user.schoolId);
     res.json(successResponse(result, 'Students fetched successfully'));
   } catch (error) {
     console.error('Failed to fetch students', {
@@ -26,9 +40,14 @@ export async function listStudentsController(req: Request, res: Response) {
   }
 }
 
-export async function getStudentController(req: Request, res: Response) {
+export async function getStudentController(req: AuthenticatedRequest, res: Response) {
   try {
-    const student = await getStudentById(req.params.id);
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const student = await getStudentById(req.params.id, req.user.schoolId);
     if (!student) {
       res.status(404).json(errorResponse('Student not found', 404));
       return;
@@ -41,31 +60,58 @@ export async function getStudentController(req: Request, res: Response) {
   }
 }
 
-export async function createStudentController(req: Request, res: Response) {
+export async function createStudentController(req: AuthenticatedRequest, res: Response) {
+  let submittedClassId: string | null | undefined;
+
   try {
     const parsed = createStudentSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json(errorResponse('Invalid student payload', 400, parsed.error.flatten()));
       return;
     }
+    submittedClassId = parsed.data.classId;
 
-    const student = await createStudent(parsed.data);
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const student = await createStudent(req.user.schoolId, parsed.data);
+
     res.status(201).json(successResponse(student, 'Student created successfully'));
   } catch (error) {
+    if (error instanceof InvalidStudentClassError) {
+      res.status(400).json(errorResponse(error.message, 400));
+      return;
+    }
+
+    if (submittedClassId && isClassForeignKeyViolation(error)) {
+      res.status(400).json(errorResponse('Selected class does not exist or does not belong to your school', 400));
+      return;
+    }
+
     console.error(error);
     res.status(500).json(errorResponse('Failed to create student'));
   }
 }
 
-export async function updateStudentController(req: Request, res: Response) {
+export async function updateStudentController(req: AuthenticatedRequest, res: Response) {
+  let submittedClassId: string | null | undefined;
+
   try {
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
     const parsed = updateStudentSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json(errorResponse('Invalid student payload', 400, parsed.error.flatten()));
       return;
     }
+    submittedClassId = parsed.data.classId;
 
-    const student = await updateStudent(req.params.id, parsed.data);
+    const student = await updateStudent(req.params.id, req.user.schoolId, parsed.data);
     if (!student) {
       res.status(404).json(errorResponse('Student not found', 404));
       return;
@@ -73,14 +119,29 @@ export async function updateStudentController(req: Request, res: Response) {
 
     res.json(successResponse(student, 'Student updated successfully'));
   } catch (error) {
+    if (error instanceof InvalidStudentClassError || (submittedClassId && isClassForeignKeyViolation(error))) {
+      res.status(400).json(errorResponse(
+        error instanceof InvalidStudentClassError
+          ? error.message
+          : 'Selected class does not exist or does not belong to your school',
+        400,
+      ));
+      return;
+    }
+
     console.error(error);
     res.status(500).json(errorResponse('Failed to update student'));
   }
 }
 
-export async function deleteStudentController(req: Request, res: Response) {
+export async function deleteStudentController(req: AuthenticatedRequest, res: Response) {
   try {
-    const student = await deleteStudent(req.params.id);
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const student = await deleteStudent(req.params.id, req.user.schoolId);
     if (!student) {
       res.status(404).json(errorResponse('Student not found', 404));
       return;
@@ -93,9 +154,14 @@ export async function deleteStudentController(req: Request, res: Response) {
   }
 }
 
-export async function uploadStudentPhotos(req: Request, res: Response) {
+export async function uploadStudentPhotos(req: AuthenticatedRequest, res: Response) {
   try {
-    const files = req.files as Express.Multer.File[] | undefined;
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const files = (req as Request & { files?: Array<{ path: string }> }).files;
     if (!files?.length) {
       res.status(400).json(errorResponse('At least one image is required'));
       return;
@@ -106,7 +172,7 @@ export async function uploadStudentPhotos(req: Request, res: Response) {
       return;
     }
 
-    const student = await getStudentById(req.params.id);
+    const student = await getStudentById(req.params.id, req.user.schoolId);
     if (!student) {
       res.status(404).json(errorResponse('Student not found', 404));
       return;
@@ -120,12 +186,12 @@ export async function uploadStudentPhotos(req: Request, res: Response) {
       isPrimary: index === 0,
     }));
 
-    const savedPhotos = await savePhotos(photoInputs);
+    const savedPhotos = await savePhotos(photoInputs, req.user.schoolId);
     res.status(201).json(successResponse(savedPhotos, 'Photos uploaded successfully'));
   } catch (error) {
     console.error('Failed to upload photos', {
       studentId: req.params.id,
-      fileCount: (req.files as Express.Multer.File[] | undefined)?.length,
+      fileCount: ((req as Request & { files?: Array<{ path: string }> }).files)?.length,
       error,
     });
 
@@ -143,9 +209,14 @@ export async function uploadStudentPhotos(req: Request, res: Response) {
   }
 }
 
-export async function listStudentPhotos(req: Request, res: Response) {
+export async function listStudentPhotos(req: AuthenticatedRequest, res: Response) {
   try {
-    const photos = await listPhotos(req.params.id);
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const photos = await listPhotos(req.params.id, req.user.schoolId);
     res.json(successResponse(photos, 'Photos fetched successfully'));
   } catch (error) {
     console.error(error);
@@ -153,9 +224,14 @@ export async function listStudentPhotos(req: Request, res: Response) {
   }
 }
 
-export async function deleteStudentPhoto(req: Request, res: Response) {
+export async function deleteStudentPhoto(req: AuthenticatedRequest, res: Response) {
   try {
-    const photo = await deletePhoto(req.params.photoId, req.params.id);
+    if (!req.user?.schoolId) {
+      res.status(403).json(errorResponse('Authenticated user is not assigned to a school', 403));
+      return;
+    }
+
+    const photo = await deletePhoto(req.params.photoId, req.params.id, req.user.schoolId);
     if (!photo) {
       res.status(404).json(errorResponse('Photo not found', 404));
       return;

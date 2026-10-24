@@ -1,7 +1,22 @@
 import { Request, Response } from 'express';
-import { comparePassword, findUserByEmail, hashPassword, signJwt } from '../services/auth.service.js';
+import { comparePassword, findUserByEmail, signJwt } from '../services/auth.service.js';
 import { query } from '../config/database.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
+
+export function getCurrentUser(req: AuthenticatedRequest, res: Response) {
+  if (!req.user) {
+    res.status(401).json(errorResponse('Authentication required', 401));
+    return;
+  }
+
+  res.json(successResponse({
+    id: req.user.id,
+    email: req.user.email,
+    role: req.user.role,
+    schoolId: req.user.schoolId,
+  }, 'Authenticated user fetched successfully'));
+}
 
 export async function login(req: Request, res: Response) {
   try {
@@ -39,30 +54,6 @@ export async function login(req: Request, res: Response) {
   }
 }
 
-export async function registerAdmin(req: Request, res: Response) {
-  try {
-    const { username, email, password } = req.body as { username?: string; email?: string; password?: string };
-    if (!username || !email || !password) {
-      res.status(400).json(errorResponse('Username, email, and password are required'));
-      return;
-    }
-
-    const existing = await findUserByEmail(email);
-    if (existing) {
-      res.status(409).json(errorResponse('User already exists'));
-      return;
-    }
-
-    const passwordHash = await hashPassword(password);
-    const rows = await query<{ id: string; username: string; email: string; role: string }>(
-      'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-      [username, email, passwordHash, 'ADMIN'],
-    );
-
-    const user = rows[0];
-    res.status(201).json(successResponse(user, 'Admin user created'));
-  } catch (error) {
-    console.error(error);
-    res.status(500).json(errorResponse('Failed to create admin'));
-  }
+export async function registerAdmin(_req: Request, res: Response) {
+  res.status(403).json(errorResponse('Admin accounts must be provisioned by an authorized school administrator', 403));
 }

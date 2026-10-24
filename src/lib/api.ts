@@ -1,11 +1,8 @@
 import { supabase } from "./supabase";
 
-const API_BASE_URL = "http://localhost:4000/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api";
 
-export async function apiFetch(
-  endpoint: string,
-  options: RequestInit = {}
-) {
+export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -25,6 +22,16 @@ export async function apiFetch(
 
   if (!response.ok) {
     const text = await response.text();
+    let message = `API Error: ${response.status}`;
+
+    try {
+      const error = JSON.parse(text) as { message?: unknown };
+      if (typeof error.message === "string") {
+        message = error.message;
+      }
+    } catch {
+      // Keep the status-based message for non-JSON error responses.
+    }
 
     console.error("API error:", {
       status: response.status,
@@ -32,7 +39,7 @@ export async function apiFetch(
       response: text,
     });
 
-    throw new Error(`API Error: ${response.status}`);
+    throw new Error(message);
   }
 
   const contentType = response.headers.get("content-type");

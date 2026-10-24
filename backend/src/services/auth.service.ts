@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { query } from '../config/database.js';
 
 export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
@@ -20,7 +20,13 @@ export async function comparePassword(password: string, hash: string) {
 }
 
 export function signJwt(user: AuthUser) {
-  return jwt.sign(user, process.env.JWT_SECRET as string, { expiresIn: process.env.JWT_EXPIRES_IN ?? '7d' });
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+
+  const expiresIn = (process.env.JWT_EXPIRES_IN as SignOptions['expiresIn']) ?? '7d';
+  return jwt.sign(user, secret, { expiresIn });
 }
 
 export async function findUserByEmail(email: string) {

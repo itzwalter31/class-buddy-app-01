@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { createClient } from "@supabase/supabase-js";
 
+import prisma from "../config/prisma.js";
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email: string;
     role: "ADMIN" | "TEACHER" | "STUDENT";
+    schoolId: string;
   };
 }
 
@@ -49,21 +52,52 @@ export async function authenticateToken(
     }
 
 
-    req.user = {
-      id:data.user.id,
-      email:data.user.email!,
-      role:"ADMIN"
-    };
+    const dbUser = await prisma.user.findUnique({
+      where: { id: data.user.id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        schoolId: true,
+      },
+    });
 
+    if (!dbUser) {
+      return res.status(403).json({
+        success: false,
+        message: "Authenticated user is not registered in this application",
+      });
+    }
+
+    if (!dbUser.schoolId) {
+      return res.status(403).json({
+        success: false,
+        message: "Authenticated user is not assigned to a school",
+      });
+    }
+
+    if (dbUser.role !== "ADMIN" && dbUser.role !== "TEACHER" && dbUser.role !== "STUDENT") {
+      return res.status(403).json({
+        success: false,
+        message: "Authenticated user does not have an assigned application role",
+      });
+    }
+
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      role: dbUser.role,
+      schoolId: dbUser.schoolId,
+    };
 
     next();
 
 
-  } catch(error){
-
-    return res.status(401).json({
-      success:false,
-      message:"Authentication failed"
+  } catch {
+    console.error("Authentication verification failed");
+    return res.status(500).json({
+      success: false,
+      message: "Authentication could not be verified",
     });
 
   }
@@ -91,7 +125,13 @@ export function requireRole(
     }
 
 
-    // temporary: allow authenticated Supabase users
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to perform this action",
+      });
+    }
+
     next();
 
   };

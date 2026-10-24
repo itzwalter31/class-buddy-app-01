@@ -1,53 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
-
-/**
- * Create a user profile in the users table after signup
- */
-export async function createUserProfile(user: User, fullName?: string) {
-  try {
-    console.log("Creating user profile for:", user.id);
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      console.error("No active Supabase session found when creating profile.");
-      throw new Error("Unable to create profile because there is no active session.");
-    }
-
-    const { error, data } = await supabase.from("users").insert([
-      {
-        id: user.id,
-        email: user.email || "",
-        full_name: fullName || user.user_metadata?.full_name || null,
-        role: "teacher",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ]).select();
-
-    if (error) {
-      console.error("Supabase insert error:", error);
-      throw new Error(`Failed to create profile: ${error.message}`);
-    }
-    
-    console.log("User profile created successfully:", data);
-    return { success: true };
-  } catch (error) {
-    console.error("Error creating user profile:", error);
-    throw error;
-  }
-}
 
 /**
  * Get user profile from database
  */
 export async function getUserProfile(userId: string) {
   try {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    const { data, error } = await supabase.from("users").select("*").eq("id", userId).single();
 
     if (error) throw error;
     return data;
@@ -66,7 +24,7 @@ export async function updateUserProfile(
     full_name?: string;
     school_name?: string;
     avatar_url?: string;
-  }
+  },
 ) {
   try {
     const { error } = await supabase

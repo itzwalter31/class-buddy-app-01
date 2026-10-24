@@ -1,0 +1,115 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public"]
+}
+
+model School {
+  id        String    @id @default(uuid())
+  name      String
+  code      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users     User[]
+  students  Student[]
+  classes   Class[]
+
+  @@map("School")
+  @@schema("public")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         String
+  schoolId     String?    @map("school_id")
+  school       School?    @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  auditLogs    AuditLog[]
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Class {
+  id         String       @id @default(uuid())
+  className  String       @map("name")
+  schoolId   String
+  school     School       @relation(fields: [schoolId], references: [id])
+  students   Student[]
+  attendance Attendance[]
+
+  @@map("Class")
+  @@schema("public")
+}
+
+model Student {
+  id            String         @id @default(uuid())
+  studentNumber String         @unique
+  firstName     String
+  lastName      String
+  otherNames    String?
+  gender        String
+  dateOfBirth   DateTime
+  schoolId      String
+  school        School         @relation(fields: [schoolId], references: [id])
+  classId       String?
+  class         Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  photos        StudentPhoto[]
+  attendance    Attendance[]
+
+  @@map("Student")
+  @@schema("public")
+}
+
+model StudentPhoto {
+  id              String   @id @default(uuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  imageUrl        String
+  embeddingStatus String
+  embeddingVector Json?
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@map("StudentPhoto")
+  @@schema("public")
+}
+
+model Attendance {
+  id               String   @id @default(uuid())
+  studentId        String   @map("student_id")
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId          String?  @map("class_id")
+  class            Class?   @relation(fields: [classId], references: [id])
+  date             DateTime
+  time             DateTime
+  status           String
+  capturedImage    String?  @map("captured_image")
+  confidenceScore  Decimal? @map("confidence_score")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("Attendance")
+  @@schema("public")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@schema("public")
+}
